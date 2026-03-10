@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum InvoiceState {
+  UNPAID
+  PENDING
+  CONFIRMING
+  PAID
+  EXPIRED
+  UNDERPAID
+  OVERPAID
+}
+
+enum DeliveryStatus {
+  queued
+  sent
+  failed
+}
+
+model Product {
+  id         String    @id @default(cuid())
+  slug       String    @unique
+  name       String
+  priceUsd   Decimal   @db.Decimal(18, 8)
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  invoices   Invoice[]
+}
+
+model Invoice {
+  id               String         @id @default(uuid())
+  productId        String
+  product          Product        @relation(fields: [productId], references: [id])
+  currencySelected String
+  amountDue        Decimal        @db.Decimal(36, 18)
+  address          String
+  network          String
+  state            InvoiceState   @default(UNPAID)
+  email            String
+  expiresAt        DateTime
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  payments         InvoicePayment[]
+  deliveries       Delivery[]
+
+  @@index([state])
+  @@index([currencySelected])
+}
+
+model InvoicePayment {
+  id             String   @id @default(cuid())
+  invoiceId      String
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id])
+  txid           String
+  amountReceived Decimal  @db.Decimal(36, 18)
+  confirmations  Int      @default(0)
+  firstSeenAt    DateTime @default(now())
+  lastSeenAt     DateTime @default(now())
+  rawEventJson   Json?
+
+  @@unique([invoiceId, txid])
+}
+
+model Delivery {
+  id               String         @id @default(cuid())
+  invoiceId        String
+  invoice          Invoice        @relation(fields: [invoiceId], references: [id])
+  status           DeliveryStatus @default(queued)
+  destinationEmail String
+  payload          Json?
+  sentAt           DateTime?
+  error            String?
+  createdAt        DateTime       @default(now())
+}
